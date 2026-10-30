@@ -218,6 +218,26 @@ button{cursor:pointer}
   .c7 .cell:has(.stamp) .dn{display:none}
   .c7 .stamp .den{display:block;font-size:.8em;right:auto;left:14%;top:10%}
 }
+
+/* month/week switch for stamps */
+.mhead{flex-wrap:wrap;row-gap:.3em}
+.mview{margin-left:.6em}
+@media (max-width:699px){.mhead .mcount{display:none}.mview{margin-left:auto}}
+.pgrid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);column-gap:.9em}
+.pcell{position:relative;display:flex;flex-direction:column;min-height:0;border-top:1px solid var(--rule);padding:.45em 0 .5em}
+.pd{display:flex;align-items:baseline;gap:.4em;font-size:.78em;color:var(--quiet);flex-wrap:wrap}
+.pd b{font-size:1.4em;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.pd em{font-style:normal;color:var(--sun);font-size:.9em}
+.pcell.sat .pd b{color:var(--sat)} .pcell.sun .pd b,.pcell.hol .pd b{color:var(--sun)}
+.pcell.out{opacity:.4}
+.pcell.today .pd b{background:var(--on-bright);color:var(--paper);border-radius:1em;padding:0 .4em}
+.pcell .slot{padding:.35em 0 0}
+.pcell .ghost,.pcell .stamp{width:min(100cqw,calc(98cqh * .8))}
+.pcell .stamp .den{display:none}
+.plink{align-items:center;justify-content:center;text-decoration:none;color:var(--quiet);font-size:.85em;text-align:center}
+.plink:hover{color:var(--ink)}
+.spread:not(.two) .page.fill.pweek{height:auto;min-height:var(--phf)}
+.spread:not(.two) .pweek .pgrid{grid-auto-rows:calc(var(--pw) * .64)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -372,7 +392,7 @@ const Store=(function(){
 })();
 
 /* state */
-const state={view:"m",m:0,w:0,cover:"flowers",tool:"text",color:0,size:3.5,penSeen:false,two:null};
+const state={view:"m",mmode:"m",m:0,w:0,cover:"flowers",tool:"text",color:0,size:3.5,penSeen:false,two:null};
 const INK=["#000","#c9573f","#5279ad","#4f8a63","#c48a2c"];
 const spread=$("#spread");
 let renderToken=0,pw=360,ph=520,inks=[],history_=[],inkKey="",saveTmr=null;
@@ -405,28 +425,32 @@ function layout(){
   document.querySelectorAll(".ti.done").forEach(r=>refreshStrike(r));
 }
 
-/* navigation */
+/* navigation. views: "m" month of stamps, "p" week of stamps (same tab), "w" week planner */
+const isWeekView=v=>v==="w"||v==="p";
 function fillJump(){
   const s=$("#jump");s.innerHTML="";
   if(state.view==="m")ML.forEach((x,i)=>s.add(new Option(MONTHS[x.m]+" "+x.y,i)));
   else WEEKS.forEach((d,i)=>{const e=addDays(d,6);s.add(new Option(d.getDate()+" "+MSHORT[d.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()]+" "+e.getFullYear(),i));});
   s.value=state.view==="m"?state.m:state.w;
 }
+function weekTitle(mon){const e=addDays(mon,6);return mon.getMonth()===e.getMonth()?mon.getDate()+" – "+e.getDate()+" "+MGEN[e.getMonth()]:mon.getDate()+" "+MSHORT[mon.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()];}
+function weekOfMonth(mi){const t=new Date(),x=ML[mi];return weekIndexOf(t.getFullYear()===x.y&&t.getMonth()===x.m?t:new Date(x.y,x.m,1));}
+function monthOfWeek(wi){const t=addDays(WEEKS[wi],3);return mIndex(t.getFullYear(),t.getMonth());}
 function go(view,i,push){
   state.view=view;
   if(view==="m")state.m=Math.max(0,Math.min(ML.length-1,i));else state.w=Math.max(0,Math.min(WEEKS.length-1,i));
-  $("#tab-m").setAttribute("aria-pressed",view==="m");$("#tab-w").setAttribute("aria-pressed",view==="w");
+  if(view!=="w")state.mmode=view;
+  $("#tab-m").setAttribute("aria-pressed",view!=="w");$("#tab-w").setAttribute("aria-pressed",view==="w");
   $("#tools").hidden=view!=="w";
   let mi=state.m;
-  if(view==="w"){
-    const mon=WEEKS[state.w],t=addDays(mon,3),e=addDays(mon,6);mi=mIndex(t.getFullYear(),t.getMonth());
-    $("#t-num").hidden=true;
-    $("#t-name").textContent=mon.getMonth()===e.getMonth()?mon.getDate()+" – "+e.getDate()+" "+MGEN[e.getMonth()]:mon.getDate()+" "+MSHORT[mon.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()];
+  if(isWeekView(view)){
+    mi=monthOfWeek(state.w);state.m=mi;
+    $("#t-num").hidden=true;$("#t-name").textContent=weekTitle(WEEKS[state.w]);
   }else{const x=ML[state.m];$("#t-num").hidden=false;$("#t-num").textContent=pad(x.m+1);$("#t-name").textContent=MONTHS[x.m]+" "+x.y;}
   document.documentElement.style.setProperty("--bright",TINT[ML[mi].m]);if(typeof applyCover==="function")applyCover();
   const meta=document.querySelector('meta[name="theme-color"]')||document.head.appendChild(Object.assign(document.createElement("meta"),{name:"theme-color"}));meta.content=TINT[ML[mi].m];
   fillJump();
-  const h="#"+(view==="m"?"m-"+ML[state.m].y+"-"+pad(ML[state.m].m+1):"w-"+iso(WEEKS[state.w]));
+  const h="#"+(view==="m"?"m-"+ML[state.m].y+"-"+pad(ML[state.m].m+1):view+"-"+iso(WEEKS[state.w]));
   if(push!==false&&location.hash!==h){try{history.replaceState(null,"",h);}catch(e){location.hash=h;}}
   render();
   $("#desk").scrollTop=0;
@@ -434,14 +458,14 @@ function go(view,i,push){
 function fromHash(){
   const h=location.hash||"";let r;
   if((r=/^#m-(\d{4})-(\d{2})$/.exec(h)))return go("m",mIndex(+r[1],+r[2]-1),false);
-  if((r=/^#w-(\d{4}-\d{2}-\d{2})$/.exec(h)))return go("w",weekIndexOf(parseISO(r[1])),false);
+  if((r=/^#([wp])-(\d{4}-\d{2}-\d{2})$/.exec(h)))return go(r[1],weekIndexOf(parseISO(r[2])),false);
   if((r=/^#m-(\d+)$/.exec(h)))return go("m",mIndex(2027,+r[1]-1),false); /* links from the 2027-only version */
   if((r=/^#w-(\d+)$/.exec(h)))return go("w",weekIndexOf(addDays(new Date(2026,11,28),7*(+r[1]-1))),false);
   const t=new Date();
   go("m",inRange(t)?mIndex(t.getFullYear(),t.getMonth()):mIndex(2027,0),false);
 }
-$("#tab-m").onclick=()=>{if(state.view==="m")return;const t=addDays(WEEKS[state.w],3);go("m",mIndex(t.getFullYear(),t.getMonth()));};
-$("#tab-w").onclick=()=>{if(state.view==="w")return;const t=new Date(),x=ML[state.m];go("w",weekIndexOf(t.getFullYear()===x.y&&t.getMonth()===x.m?t:new Date(x.y,x.m,1)));};
+$("#tab-m").onclick=()=>{if(state.view!=="w")return;if(state.mmode==="p")go("p",state.w);else go("m",monthOfWeek(state.w));};
+$("#tab-w").onclick=()=>{if(state.view==="w")return;go("w",state.view==="p"?state.w:weekOfMonth(state.m));};
 $("#prev").onclick=()=>go(state.view,(state.view==="m"?state.m:state.w)-1);
 $("#next").onclick=()=>go(state.view,(state.view==="m"?state.m:state.w)+1);
 $("#jump").onchange=e=>go(state.view,+e.target.value);
@@ -457,7 +481,7 @@ document.addEventListener("keydown",e=>{if(e.target.closest("textarea,select")||
 function render(){
   renderToken++;inks=[];history_=[];
   if(state.two===null)state.two=measure().two;
-  if(state.view==="m")renderMonth(state.m);else renderWeek(state.w);
+  if(state.view==="m")renderMonth(state.m);else if(state.view==="p")renderPhotoWeek(state.w);else renderWeek(state.w);
   layout();
 }
 
@@ -480,7 +504,7 @@ function renderMonth(mi){
   const key=y+"-"+pad(m+1);
   let html;
   if(state.two){
-    let L='<section class="page l"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount"></span></div><div class="mgrid c4" style="'+rt+'">';
+    let L='<section class="page l"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount"></span><div class="mini mview" role="group" aria-label="Показать марки"><button data-mv="m" aria-pressed="'+(state.view==="m")+'">Месяц</button><button data-mv="p" aria-pressed="'+(state.view==="p")+'">Неделя</button></div></div><div class="mgrid c4" style="'+rt+'">';
     for(let i=0;i<4;i++)L+='<div class="wd">'+WD[i]+'</div>';
     let R='<section class="page r"><div class="mhead"><span class="q">нажмите на день, чтобы добавить фото</span></div><div class="mgrid c4" style="'+rt+'">';
     R+='<div class="wd">'+WD[4]+'</div><div class="wd sat">'+WD[5]+'</div><div class="wd sun">'+WD[6]+'</div><div class="wd">Заметки</div>';
@@ -491,7 +515,7 @@ function renderMonth(mi){
     });
     html=L+'</div></section>'+R+'</div></section>';
   }else{
-    let P='<section class="page fill"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount">нажмите на день, чтобы добавить фото</span></div><div class="mgrid c7" style="'+rt+'">';
+    let P='<section class="page fill"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount">нажмите на день, чтобы добавить фото</span><div class="mini mview" role="group" aria-label="Показать марки"><button data-mv="m" aria-pressed="'+(state.view==="m")+'">Месяц</button><button data-mv="p" aria-pressed="'+(state.view==="p")+'">Неделя</button></div></div><div class="mgrid c7" style="'+rt+'">';
     WD.forEach((w,i)=>P+='<div class="wd'+(i===5?" sat":i===6?" sun":"")+'">'+w+'</div>');
     rows.forEach(mon=>{for(let i=0;i<7;i++)P+=cellHTML(addDays(mon,i),m,y);});
     P+='</div></section><section class="page auto"><div class="mhead"><span class="t">Заметки по неделям</span></div>';
@@ -507,11 +531,33 @@ function renderMonth(mi){
   let tmr;tas.forEach(t=>t.addEventListener("input",()=>{clearTimeout(tmr);tmr=setTimeout(()=>Store.set("mnote-"+key,{kind:"mnote",rows:tas.map(x=>x.value)}),700);}));
 }
 spread.addEventListener("click",e=>{
+  const mv=e.target.closest(".mview [data-mv]");if(mv){const v=mv.dataset.mv;if(v===state.view)return;if(v==="p")go("p",weekOfMonth(state.m));else go("m",monthOfWeek(state.w));return;}
   const a=e.target.closest("a[href^='#w-']");if(a){e.preventDefault();go("w",weekIndexOf(parseISO(a.getAttribute("href").slice(3))));return;}
   const b=e.target.closest(".slot[data-date]");if(!b)return;
   const ds=b.dataset.date;
   if(photos[ds])openPhoto(ds);else pickPhoto(ds);
 });
+
+/* week of stamps: same photos as the month, big */
+function renderPhotoWeek(i){
+  const tok=renderToken,mon=WEEKS[i],days=[0,1,2,3,4,5,6].map(k=>addDays(mon,k));
+  const tog='<div class="mini mview" role="group" aria-label="Показать марки"><button data-mv="m" aria-pressed="false">Месяц</button><button data-mv="p" aria-pressed="true">Неделя</button></div>';
+  const head=(t,withTog)=>'<div class="mhead"><span class="t">'+t+'</span>'+(withTog?tog:'')+'</div>';
+  const cell=d=>{
+    const ds=iso(d),ok=inRange(d),w=dow(d),h=holiday(d);
+    const cls=["pcell",w===5?"sat":"",w===6?"sun":"",h?"hol":"",ok?"":"out",ds===TODAY?"today":""].join(" ");
+    return '<div class="'+cls+'"><span class="pd"><b>'+d.getDate()+'</b>'+WD[w]+(h?'<em>'+esc(h)+'</em>':'')+'</span>'+(ok?'<button class="slot" data-date="'+ds+'" aria-label="'+d.getDate()+" "+MGEN[d.getMonth()]+': фото дня"><div class="ghost"></div></button>':'<div class="slot"></div>')+'</div>';
+  };
+  const link='<a class="pcell plink" href="#w-'+iso(mon)+'">Открыть разворот недели</a>';
+  const e=addDays(mon,6),title=weekTitle(mon)+" "+e.getFullYear();
+  let html;
+  if(state.two)html='<section class="page l pweek">'+head(title,true)+'<div class="pgrid">'+days.slice(0,4).map(cell).join("")+'</div></section><section class="page r pweek">'+head("",false)+'<div class="pgrid">'+days.slice(4).map(cell).join("")+link+'</div></section>';
+  else html='<section class="page fill pweek">'+head(title,true)+'<div class="pgrid">'+days.map(cell).join("")+link+'</div></section>';
+  spread.innerHTML=html;
+  const paint=()=>spread.querySelectorAll(".slot[data-date]").forEach(b=>{const img=photos[b.dataset.date];if(img&&!b.querySelector(".stamp"))b.innerHTML=stampHTML(b.dataset.date,img);});
+  paint();
+  [...new Set(days.filter(inRange).map(d=>iso(d).slice(0,7)))].forEach(k=>Store.byMonth(k).then(map=>{if(tok!==renderToken)return;Object.assign(photos,map);paint();}));
+}
 
 /* photos */
 let pending=null;const fileIn=$("#file");
