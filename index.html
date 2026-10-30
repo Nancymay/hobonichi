@@ -250,6 +250,11 @@ button{cursor:pointer}
 (function(){
 "use strict";
 const Y=2027;
+/* the diary runs from October 2026 to December 2027 */
+const START=new Date(2026,9,1),END=new Date(2027,11,31);
+const ML=[];for(let d=new Date(START);d<=END;d=new Date(d.getFullYear(),d.getMonth()+1,1))ML.push({y:d.getFullYear(),m:d.getMonth()});
+const mIndex=(y,m)=>Math.max(0,Math.min(ML.length-1,(y-START.getFullYear())*12+m-START.getMonth()));
+const inRange=d=>d>=START&&d<=END;
 const MONTHS=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MGEN=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 const MSHORT=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
@@ -264,13 +269,14 @@ const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
 const dow=d=>(d.getDay()+6)%7;
 const mondayOf=d=>addDays(d,-dow(d));
-const holiday=d=>d.getFullYear()===Y?HOL[pad(d.getMonth()+1)+"-"+pad(d.getDate())]:null;
+const holiday=d=>inRange(d)?HOL[pad(d.getMonth()+1)+"-"+pad(d.getDate())]:null;
 function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-n);const y0=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-y0)/864e5+1)/7);}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const TODAY=iso(new Date());
-const FIRST_MON=mondayOf(new Date(Y,0,1));
-const WEEKS=[];for(let d=FIRST_MON;d<=new Date(Y,11,31);d=addDays(d,7))WEEKS.push(d);
-const weekIndexOf=d=>Math.round((mondayOf(d)-FIRST_MON)/(7*864e5));
+const FIRST_MON=mondayOf(START);
+const WEEKS=[];for(let d=FIRST_MON;d<=END;d=addDays(d,7))WEEKS.push(d);
+const weekIndexOf=d=>Math.max(0,Math.min(WEEKS.length-1,Math.round((mondayOf(d)-FIRST_MON)/(7*864e5))));
+const parseISO=t=>new Date(+t.slice(0,4),+t.slice(5,7)-1,+t.slice(8,10));
 
 /* perforation mask */
 (function(){
@@ -386,37 +392,40 @@ function layout(){
 /* navigation */
 function fillJump(){
   const s=$("#jump");s.innerHTML="";
-  if(state.view==="m")MONTHS.forEach((n,i)=>s.add(new Option(n,i)));
-  else WEEKS.forEach((d,i)=>{const e=addDays(d,6);s.add(new Option("Неделя "+isoWeek(d)+": "+d.getDate()+" "+MSHORT[d.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()],i));});
+  if(state.view==="m")ML.forEach((x,i)=>s.add(new Option(MONTHS[x.m]+" "+x.y,i)));
+  else WEEKS.forEach((d,i)=>{const e=addDays(d,6);s.add(new Option(d.getDate()+" "+MSHORT[d.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()]+" "+e.getFullYear(),i));});
   s.value=state.view==="m"?state.m:state.w;
 }
 function go(view,i,push){
   state.view=view;
-  if(view==="m")state.m=Math.max(0,Math.min(11,i));else state.w=Math.max(0,Math.min(WEEKS.length-1,i));
+  if(view==="m")state.m=Math.max(0,Math.min(ML.length-1,i));else state.w=Math.max(0,Math.min(WEEKS.length-1,i));
   $("#tab-m").setAttribute("aria-pressed",view==="m");$("#tab-w").setAttribute("aria-pressed",view==="w");
   $("#tools").hidden=view!=="w";
   let mi=state.m;
   if(view==="w"){
-    const mon=WEEKS[state.w],t=addDays(mon,3),e=addDays(mon,6);mi=t.getFullYear()<Y?0:t.getMonth();
+    const mon=WEEKS[state.w],t=addDays(mon,3),e=addDays(mon,6);mi=mIndex(t.getFullYear(),t.getMonth());
     $("#t-num").hidden=true;
-    $("#t-name").textContent=mon.getDate()+(mon.getMonth()===e.getMonth()?"":" "+MGEN[mon.getMonth()])+" – "+e.getDate()+" "+MGEN[e.getMonth()];
-  }else{$("#t-num").hidden=false;$("#t-num").textContent=pad(state.m+1);$("#t-name").textContent=MONTHS[state.m];}
-  document.documentElement.style.setProperty("--bright",TINT[mi]);if(typeof applyCover==="function")applyCover();
-  const meta=document.querySelector('meta[name="theme-color"]')||document.head.appendChild(Object.assign(document.createElement("meta"),{name:"theme-color"}));meta.content=TINT[mi];
+    $("#t-name").textContent=mon.getMonth()===e.getMonth()?mon.getDate()+" – "+e.getDate()+" "+MGEN[e.getMonth()]:mon.getDate()+" "+MSHORT[mon.getMonth()]+" – "+e.getDate()+" "+MSHORT[e.getMonth()];
+  }else{const x=ML[state.m];$("#t-num").hidden=false;$("#t-num").textContent=pad(x.m+1);$("#t-name").textContent=MONTHS[x.m]+" "+x.y;}
+  document.documentElement.style.setProperty("--bright",TINT[ML[mi].m]);if(typeof applyCover==="function")applyCover();
+  const meta=document.querySelector('meta[name="theme-color"]')||document.head.appendChild(Object.assign(document.createElement("meta"),{name:"theme-color"}));meta.content=TINT[ML[mi].m];
   fillJump();
-  const h="#"+(view==="m"?"m-"+(state.m+1):"w-"+(state.w+1));
+  const h="#"+(view==="m"?"m-"+ML[state.m].y+"-"+pad(ML[state.m].m+1):"w-"+iso(WEEKS[state.w]));
   if(push!==false&&location.hash!==h){try{history.replaceState(null,"",h);}catch(e){location.hash=h;}}
   render();
   $("#desk").scrollTop=0;
 }
 function fromHash(){
-  const m=/^#(m|w)-(\d+)$/.exec(location.hash||"");
-  if(m)return go(m[1],parseInt(m[2],10)-1,false);
+  const h=location.hash||"";let r;
+  if((r=/^#m-(\d{4})-(\d{2})$/.exec(h)))return go("m",mIndex(+r[1],+r[2]-1),false);
+  if((r=/^#w-(\d{4}-\d{2}-\d{2})$/.exec(h)))return go("w",weekIndexOf(parseISO(r[1])),false);
+  if((r=/^#m-(\d+)$/.exec(h)))return go("m",mIndex(2027,+r[1]-1),false); /* links from the 2027-only version */
+  if((r=/^#w-(\d+)$/.exec(h)))return go("w",weekIndexOf(addDays(new Date(2026,11,28),7*(+r[1]-1))),false);
   const t=new Date();
-  go("m",t.getFullYear()===Y?t.getMonth():0,false);
+  go("m",inRange(t)?mIndex(t.getFullYear(),t.getMonth()):mIndex(2027,0),false);
 }
-$("#tab-m").onclick=()=>{if(state.view==="m")return;const t=addDays(WEEKS[state.w],3);go("m",t.getFullYear()<Y?0:t.getFullYear()>Y?11:t.getMonth());};
-$("#tab-w").onclick=()=>{if(state.view==="w")return;const t=new Date();go("w",weekIndexOf(t.getFullYear()===Y&&t.getMonth()===state.m?t:new Date(Y,state.m,1)));};
+$("#tab-m").onclick=()=>{if(state.view==="m")return;const t=addDays(WEEKS[state.w],3);go("m",mIndex(t.getFullYear(),t.getMonth()));};
+$("#tab-w").onclick=()=>{if(state.view==="w")return;const t=new Date(),x=ML[state.m];go("w",weekIndexOf(t.getFullYear()===x.y&&t.getMonth()===x.m?t:new Date(x.y,x.m,1)));};
 $("#prev").onclick=()=>go(state.view,(state.view==="m"?state.m:state.w)-1);
 $("#next").onclick=()=>go(state.view,(state.view==="m"?state.m:state.w)+1);
 $("#jump").onchange=e=>go(state.view,+e.target.value);
@@ -442,33 +451,33 @@ function stampHTML(date,img,extra){
   const d=parseInt(date.slice(8),10),rot=((d*37)%7-3)*0.6;
   return '<div class="stamp '+(extra||"")+'" style="--rot:'+rot.toFixed(1)+'deg"><div class="sh"></div><img alt="" src="'+img+'"><span class="den">'+d+'</span></div>';
 }
-function cellHTML(d,m){
-  const ds=iso(d),inM=d.getMonth()===m&&d.getFullYear()===Y,w=dow(d);
+function cellHTML(d,m,y){
+  const ds=iso(d),inM=d.getMonth()===m&&d.getFullYear()===y,w=dow(d);
   const cls=["cell",w===5?"sat":"",w===6?"sun":"",holiday(d)&&inM?"hol":"",inM?"":"out",ds===TODAY?"today":""].join(" ");
   const inner=inM?'<button class="slot" data-date="'+ds+'" aria-label="'+d.getDate()+" "+MGEN[m]+': фото дня"><div class="ghost"></div></button>':'<div class="slot"></div>';
   return '<div class="'+cls+'"><span class="dn">'+d.getDate()+'</span>'+inner+'</div>';
 }
-function renderMonth(m){
-  const tok=renderToken,first=new Date(Y,m,1),last=new Date(Y,m+1,0);
+function renderMonth(mi){
+  const y=ML[mi].y,m=ML[mi].m,tok=renderToken,first=new Date(y,m,1),last=new Date(y,m+1,0);
   const rows=[];for(let d=mondayOf(first);d<=last;d=addDays(d,7))rows.push(d);
   const rt="grid-template-rows:auto repeat("+rows.length+",1fr)";
-  const key=Y+"-"+pad(m+1);
+  const key=y+"-"+pad(m+1);
   let html;
   if(state.two){
-    let L='<section class="page l"><div class="mhead"><span class="t">'+MONTHS[m]+'</span><span class="q mcount"></span></div><div class="mgrid c4" style="'+rt+'">';
+    let L='<section class="page l"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount"></span></div><div class="mgrid c4" style="'+rt+'">';
     for(let i=0;i<4;i++)L+='<div class="wd">'+WD[i]+'</div>';
     let R='<section class="page r"><div class="mhead"><span class="q">нажмите на день, чтобы добавить фото</span></div><div class="mgrid c4" style="'+rt+'">';
     R+='<div class="wd">'+WD[4]+'</div><div class="wd sat">'+WD[5]+'</div><div class="wd sun">'+WD[6]+'</div><div class="wd">Заметки</div>';
     rows.forEach((mon,ri)=>{
-      for(let i=0;i<4;i++)L+=cellHTML(addDays(mon,i),m);
-      for(let i=4;i<7;i++)R+=cellHTML(addDays(mon,i),m);
+      for(let i=0;i<4;i++)L+=cellHTML(addDays(mon,i),m,y);
+      for(let i=4;i<7;i++)R+=cellHTML(addDays(mon,i),m,y);
       R+='<div class="notes"><a href="#w-'+(weekIndexOf(mon)+1)+'">неделя '+isoWeek(mon)+' ›</a><textarea data-row="'+ri+'" aria-label="Заметки на неделю '+isoWeek(mon)+'"></textarea></div>';
     });
     html=L+'</div></section>'+R+'</div></section>';
   }else{
-    let P='<section class="page fill"><div class="mhead"><span class="t">'+MONTHS[m]+'</span><span class="q mcount">нажмите на день, чтобы добавить фото</span></div><div class="mgrid c7" style="'+rt+'">';
+    let P='<section class="page fill"><div class="mhead"><span class="t">'+MONTHS[m]+(y!==2027?" "+y:"")+'</span><span class="q mcount">нажмите на день, чтобы добавить фото</span></div><div class="mgrid c7" style="'+rt+'">';
     WD.forEach((w,i)=>P+='<div class="wd'+(i===5?" sat":i===6?" sun":"")+'">'+w+'</div>');
-    rows.forEach(mon=>{for(let i=0;i<7;i++)P+=cellHTML(addDays(mon,i),m);});
+    rows.forEach(mon=>{for(let i=0;i<7;i++)P+=cellHTML(addDays(mon,i),m,y);});
     P+='</div></section><section class="page auto"><div class="mhead"><span class="t">Заметки по неделям</span></div>';
     rows.forEach((mon,ri)=>{const e=addDays(mon,6);P+='<div class="nrow"><a href="#w-'+(weekIndexOf(mon)+1)+'">неделя '+isoWeek(mon)+', '+mon.getDate()+" "+MSHORT[mon.getMonth()]+' – '+e.getDate()+" "+MSHORT[e.getMonth()]+' ›</a><textarea data-row="'+ri+'" rows="2" aria-label="Заметки на неделю '+isoWeek(mon)+'"></textarea></div>';});
     html=P+'</section>';
@@ -482,7 +491,7 @@ function renderMonth(m){
   let tmr;tas.forEach(t=>t.addEventListener("input",()=>{clearTimeout(tmr);tmr=setTimeout(()=>Store.set("mnote-"+key,{kind:"mnote",rows:tas.map(x=>x.value)}),700);}));
 }
 spread.addEventListener("click",e=>{
-  const a=e.target.closest("a[href^='#w-']");if(a){e.preventDefault();go("w",parseInt(a.getAttribute("href").slice(3),10)-1);return;}
+  const a=e.target.closest("a[href^='#w-']");if(a){e.preventDefault();go("w",weekIndexOf(parseISO(a.getAttribute("href").slice(3))));return;}
   const b=e.target.closest(".slot[data-date]");if(!b)return;
   const ds=b.dataset.date;
   if(photos[ds])openPhoto(ds);else pickPhoto(ds);
@@ -531,10 +540,10 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!modal.hidden)hideM
 function renderWeek(i){
   const tok=renderToken,mon=WEEKS[i],sun=addDays(mon,6);
   const range=mon.getDate()+" "+MGEN[mon.getMonth()]+" - "+sun.getDate()+" "+MGEN[sun.getMonth()];
-  let L='<section class="page l fill wk"><div class="whead"><span class="t">'+range+'</span><span class="q">неделя '+isoWeek(mon)+'</span></div><div class="days">';
+  let L='<section class="page l fill wk"><div class="whead"><span class="t">'+range+'</span><span class="q">'+sun.getFullYear()+', неделя '+isoWeek(mon)+'</span></div><div class="days">';
   for(let k=0;k<7;k++){
     const d=addDays(mon,k),h=holiday(d);
-    const cls=["day",k===5?"sat":"",k===6?"sun":"",h?"hol":"",d.getFullYear()!==Y?"out":"",iso(d)===TODAY?"today":""].join(" ");
+    const cls=["day",k===5?"sat":"",k===6?"sun":"",h?"hol":"",!inRange(d)?"out":"",iso(d)===TODAY?"today":""].join(" ");
     L+='<div class="'+cls+'"><div class="dlab"><b>'+d.getDate()+'</b><span>'+WD[k]+'</span>'+(h?'<em>'+esc(h)+'</em>':'')+'</div><div class="dlist" data-k="'+k+'" aria-label="Дела на '+d.getDate()+" "+MGEN[d.getMonth()]+'"></div></div>';
   }
   L+='</div><canvas class="ink" data-side="L"></canvas></section>';
