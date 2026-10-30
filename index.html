@@ -290,7 +290,12 @@ const Store=(function(){
     try{
       if(!window.claude||typeof window.claude.use!=="function")return;
       const [d,u]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
-      if(d&&u){const id=await u.id();if(id){db=d;uid=id;mode="cloud";}}
+      if(d&&u){
+        const id=await u.id();
+        let canWrite=null;try{if(typeof u.can==="function")canWrite=await u.can("data.write");}catch(e){}
+        /* visitors who can't write here (e.g. friends on a public link) keep their diary in their own browser */
+        if(id&&canWrite!==false){db=d;uid=id;mode="cloud";}
+      }
     }catch(e){}
   })().finally(()=>status());
   const LK="hb2027:";
@@ -330,7 +335,7 @@ const Store=(function(){
       catch(err){
         const c=err&&err.code;
         if(c==="quota_exceeded")lastErr="Место закончилось: удалите несколько фото";
-        else if(c==="invalid_argument"){lastErr="Нет прав на сохранение";readOnly=true;}
+        else if(c==="invalid_argument"&&mode==="cloud"){mode="local";try{lset(id,v);lastErr="";}catch(e2){lastErr="Место закончилось: удалите несколько фото";}}
         else lastErr="Не сохранилось, попробуйте ещё раз";
       }
       e.busy=false;inflight--;
