@@ -202,6 +202,22 @@ button{cursor:pointer}
 .spread:not(.two) .page.l.wk{height:auto;min-height:var(--phf)}
 .spread:not(.two) .wk .days{grid-template-rows:none;grid-auto-rows:minmax(calc((var(--phf) - 6em) / 7),auto)}
 .spread:not(.two) .dlist{overflow:visible;padding-bottom:.6em}
+
+/* phone month: give the stamps the whole cell */
+@media (max-width:699px){
+  .desk:has(.mgrid.c7){padding-left:calc(env(safe-area-inset-left) + 6px);padding-right:calc(env(safe-area-inset-right) + 6px)}
+  .spread:not(.two) .page.fill:has(.mgrid.c7){padding:1.1em .45em .6em;border-radius:16px}
+  .spread:not(.two) .page.fill:has(.mgrid.c7) .mhead{padding:0 .5em}
+  .c7 .wd{padding:0 0 .45em;text-align:center}
+  .c7 .cell{padding:2px 1px}
+  .c7 .dn{left:50%;transform:translateX(-50%);top:.25em}
+  .c7 .cell.today .dn{left:50%}
+  .c7 .slot{padding:1.35em 0 0}
+  .c7 .ghost,.c7 .stamp{width:min(100cqw,calc(98cqh * .8))}
+  .c7 .slot:has(.stamp){padding:0}
+  .c7 .cell:has(.stamp) .dn{display:none}
+  .c7 .stamp .den{display:block;font-size:.8em;right:auto;left:14%;top:10%}
+}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
